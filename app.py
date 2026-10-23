@@ -236,18 +236,33 @@ def show_header():
 # =====================================================
 # 7. WELCOME SCREEN
 # =====================================================
+
 def welcome_page():
     st.markdown("""
-    <div class="welcome-container">
-        <div class="welcome-logo">🌱</div>
+    <div style="text-align:center; padding:65px 15px 30px 15px;">
+        <div style="font-size:100px; line-height:1.2; margin-bottom:20px;">
+            🌱
+        </div>
 
-        <div class="welcome-title">
+        <h1 style="
+            color:#064D25;
+            font-size:2.5rem;
+            font-weight:800;
+            line-height:1.3;
+            margin-bottom:18px;
+            border:none;
+            background:transparent;
+        ">
             Welcome to Cotton Seed Quality Detection App
-        </div>
+        </h1>
 
-        <div class="welcome-description">
+        <p style="
+            color:#4D6654;
+            font-size:1.1rem;
+            margin-bottom:20px;
+        ">
             Smart cotton seed quality analysis using image processing
-        </div>
+        </p>
     </div>
     """, unsafe_allow_html=True)
 
