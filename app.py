@@ -2,6 +2,7 @@
 import streamlit as st
 import tensorflow as tf
 import numpy as np
+import hmac
 from PIL import Image
 
 st.set_page_config(
@@ -10,108 +11,194 @@ st.set_page_config(
     layout="centered"
 )
 
+
 @st.cache_resource
 def load_model():
     return tf.keras.models.load_model(
         "cotton_seed_mobilenetv3.keras"
     )
 
+
+if "logged_in" not in st.session_state:
+    st.session_state.logged_in = False
+
+if "username" not in st.session_state:
+    st.session_state.username = ""
+
+if "role" not in st.session_state:
+    st.session_state.role = ""
+
 if "history" not in st.session_state:
     st.session_state.history = []
 
-st.title("🌱 Cotton Seed Quality Detection")
-st.write("Upload a cotton seed image to predict its quality.")
 
-uploaded_file = st.file_uploader(
-    "Choose a cotton seed image",
-    type=["jpg", "jpeg", "png"]
+def login_user(username, password):
+    users = st.secrets["users"]
+
+    for role_name, details in users.items():
+        saved_username = str(details["username"])
+        saved_password = str(details["password"])
+
+        if (
+            hmac.compare_digest(username, saved_username)
+            and hmac.compare_digest(password, saved_password)
+        ):
+            return role_name
+
+    return None
+
+
+if not st.session_state.logged_in:
+    st.title("🌱 Cotton Seed Quality Detection")
+    st.subheader("Login to continue")
+
+    with st.form("login_form"):
+        username = st.text_input("Username")
+        password = st.text_input(
+            "Password", type="password"
+        )
+
+        submitted = st.form_submit_button(
+            "Login", use_container_width=True
+        )
+
+    if submitted:
+        role = login_user(
+            username.strip(), password
+        )
+
+        if role:
+            st.session_state.logged_in = True
+            st.session_state.username = username.strip()
+            st.session_state.role = role
+            st.rerun()
+        else:
+            st.error("Invalid username or password.")
+
+    st.stop()
+
+
+st.title("🌱 Cotton Seed Quality Detection")
+
+role = st.session_state.role
+st.write(
+    f"Welcome, **{st.session_state.username}**!"
 )
 
-if uploaded_file is not None:
-    image = Image.open(uploaded_file).convert("RGB")
-
-    st.image(
-        image,
-        caption="Selected Cotton Seed Image",
-        use_container_width=True
+if role == "admin":
+    page = st.sidebar.radio(
+        "Navigation",
+        ["Admin Dashboard", "Seed Prediction"]
     )
-
-    if st.button("Predict Seed Quality"):
-        with st.spinner("Analyzing image..."):
-            model = load_model()
-
-            image_resized = image.resize((224, 224))
-            image_array = np.array(
-                image_resized,
-                dtype=np.float32
-            )
-            image_array = np.expand_dims(
-                image_array, axis=0
-            )
-
-            predictions = model.predict(
-                image_array, verbose=0
-            )[0]
-
-            classes = ["Broken", "Cracked", "Good"]
-            predicted_index = int(np.argmax(predictions))
-            predicted_class = classes[predicted_index]
-            confidence = float(
-                predictions[predicted_index]
-            ) * 100
-
-            st.session_state.history.append({
-                "Quality": predicted_class,
-                "Confidence": f"{confidence:.2f}%"
-            })
-
-        st.subheader("Prediction Result")
-
-        if predicted_class == "Good":
-            st.success("Quality: GOOD")
-            st.write(
-                "The model classified this image as a good cotton seed."
-            )
-        elif predicted_class == "Broken":
-            st.warning("Quality: BROKEN")
-            st.write(
-                "The model detected a broken cotton seed."
-            )
-        else:
-            st.warning("Quality: CRACKED")
-            st.write(
-                "The model detected a cracked cotton seed."
-            )
-
-        st.metric(
-            "Prediction Confidence",
-            f"{confidence:.2f}%"
-        )
-
-        st.subheader("Confidence by Class")
-
-        for i, class_name in enumerate(classes):
-            score = float(predictions[i])
-            st.write(
-                f"**{class_name}:** {score * 100:.2f}%"
-            )
-            st.progress(max(0.0, min(1.0, score)))
-
-        st.caption(
-            "This is an AI prediction. Verify results against actual seed quality."
-        )
-
-st.divider()
-st.subheader("📋 Prediction History")
-
-if st.session_state.history:
-    st.dataframe(
-        st.session_state.history,
-        use_container_width=True
-    )
-
-    if st.button("Clear Prediction History"):
-        st.session_state.history = []
-        st.rerun()
 else:
-    st.info("No predictions yet. Upload an image to get started.")
+    page = "Seed Prediction"
+
+if st.sidebar.button("Logout"):
+    st.session_state.logged_in = False
+    st.session_state.username = ""
+    st.session_state.role = ""
+    st.rerun()
+
+
+if page == "Admin Dashboard":
+    st.subheader("🛡️ Administrator Dashboard")
+    st.write("Login role: Administrator")
+
+    st.metric(
+        "Predictions in this session",
+        len(st.session_state.history)
+    )
+
+    if st.session_state.history:
+        st.subheader("Recent Prediction History")
+        st.dataframe(
+            st.session_state.history,
+            use_container_width=True
+        )
+
+        if st.button("Clear Prediction History"):
+            st.session_state.history = []
+            st.rerun()
+    else:
+        st.info("No predictions recorded in this session.")
+
+else:
+    st.subheader("Seed Quality Prediction")
+
+    uploaded_file = st.file_uploader(
+        "Choose a cotton seed image",
+        type=["jpg", "jpeg", "png"]
+    )
+
+    if uploaded_file is not None:
+        image = Image.open(uploaded_file).convert("RGB")
+
+        st.image(
+            image,
+            caption="Selected Cotton Seed Image",
+            use_container_width=True
+        )
+
+        if st.button("Predict Seed Quality"):
+            with st.spinner("Analyzing image..."):
+                model = load_model()
+
+                resized = image.resize((224, 224))
+                image_array = np.array(
+                    resized, dtype=np.float32
+                )
+                image_array = np.expand_dims(
+                    image_array, axis=0
+                )
+
+                predictions = model.predict(
+                    image_array, verbose=0
+                )[0]
+
+                classes = ["Broken", "Cracked", "Good"]
+                index = int(np.argmax(predictions))
+                predicted_class = classes[index]
+                confidence = float(
+                    predictions[index]
+                ) * 100
+
+                st.session_state.history.append({
+                    "Quality": predicted_class,
+                    "Confidence": f"{confidence:.2f}%"
+                })
+
+            st.subheader("Prediction Result")
+
+            if predicted_class == "Good":
+                st.success("Quality: GOOD")
+            elif predicted_class == "Broken":
+                st.warning("Quality: BROKEN")
+            else:
+                st.warning("Quality: CRACKED")
+
+            st.metric(
+                "Prediction Confidence",
+                f"{confidence:.2f}%"
+            )
+
+            st.subheader("Confidence by Class")
+
+            for i, name in enumerate(classes):
+                score = float(predictions[i])
+                st.write(
+                    f"**{name}:** {score * 100:.2f}%"
+                )
+                st.progress(
+                    max(0.0, min(1.0, score))
+                )
+
+    st.divider()
+    st.subheader("📋 Prediction History")
+
+    if st.session_state.history:
+        st.dataframe(
+            st.session_state.history,
+            use_container_width=True
+        )
+    else:
+        st.info("No predictions yet. Upload an image to begin.")
