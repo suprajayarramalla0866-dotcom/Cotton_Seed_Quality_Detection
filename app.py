@@ -191,18 +191,21 @@ with st.sidebar:
         st.session_state.history = []
         st.rerun()
 
-
 # ==================================================
-# 9. LOGGED-IN USER DASHBOARD
+# 9. USERNAME-BASED DASHBOARD
 # ==================================================
 if page == "Logged-in User Dashboard":
-    st.title("👤 Logged-in User Dashboard")
 
-    # Display the exact username used to log in.
-    st.subheader(
-        f"Welcome, {st.session_state.username}!"
+    username = st.session_state.username
+
+    st.title(f"👤 {username}'s Dashboard")
+
+    st.subheader(f"Welcome, {username}!")
+
+    st.write(
+        "View your account information and cotton seed "
+        "prediction statistics."
     )
-
     st.write("Your account information")
 
     col1, col2 = st.columns(2)
