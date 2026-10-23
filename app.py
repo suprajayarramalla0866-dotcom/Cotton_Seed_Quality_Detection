@@ -9,9 +9,9 @@ from datetime import datetime
 from pathlib import Path
 from PIL import Image
 
-# ==================================================
+# =====================================================
 # 1. PAGE CONFIGURATION
-# ==================================================
+# =====================================================
 st.set_page_config(
     page_title="Cotton Seed Quality Detection",
     page_icon="🌱",
@@ -19,9 +19,9 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# ==================================================
+# =====================================================
 # 2. GREEN AND WHITE DESIGN
-# ==================================================
+# =====================================================
 st.markdown(
     """
     <style>
@@ -43,8 +43,8 @@ st.markdown(
         color: white;
         border: none;
         border-radius: 8px;
-        font-weight: 600;
         min-height: 40px;
+        font-weight: 600;
     }
 
     div.stButton > button:hover,
@@ -64,22 +64,22 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# ==================================================
-# 3. APP SETTINGS
-# ==================================================
-MODEL_PATH = Path(__file__).parent / "cotton_seed_mobilenetv3.keras"
-DB_PATH = Path(__file__).parent / "users.db"
+# =====================================================
+# 3. SETTINGS
+# =====================================================
+BASE_DIR = Path(__file__).resolve().parent
+MODEL_PATH = BASE_DIR / "cotton_seed_mobilenetv3.keras"
+DB_PATH = BASE_DIR / "users.db"
 
 IMAGE_SIZE = (224, 224)
 
-# IMPORTANT:
-# This order must match your model's training class order.
+# Must match the actual class order used during model training.
 CLASS_NAMES = ["Broken", "Cracked", "Good"]
 
 
-# ==================================================
+# =====================================================
 # 4. SESSION STATE
-# ==================================================
+# =====================================================
 defaults = {
     "logged_in": False,
     "username": "",
@@ -92,23 +92,25 @@ for key, value in defaults.items():
         st.session_state[key] = value
 
 
-# ==================================================
-# 5. DATABASE
-# ==================================================
+# =====================================================
+# 5. USER DATABASE
+# =====================================================
 def get_connection():
     return sqlite3.connect(str(DB_PATH), timeout=10)
 
 
 def init_database():
     with get_connection() as conn:
-        conn.execute("""
+        conn.execute(
+            """
             CREATE TABLE IF NOT EXISTS users (
                 username TEXT PRIMARY KEY COLLATE NOCASE,
                 password_hash TEXT NOT NULL,
                 salt TEXT NOT NULL,
                 role TEXT NOT NULL DEFAULT 'user'
             )
-        """)
+            """
+        )
 
 
 def hash_password(password, salt):
@@ -124,13 +126,15 @@ def register_user(username, password):
     username = username.strip()
 
     if len(username) < 3:
-        return False, "Username must have at least 3 characters."
+        return False, "Username must contain at least 3 characters."
 
     if len(username) > 40:
         return False, "Username must be 40 characters or fewer."
 
     if not username.replace("_", "").replace("-", "").isalnum():
-        return False, "Use letters, numbers, underscores, or hyphens."
+        return False, (
+            "Use only letters, numbers, underscores, or hyphens."
+        )
 
     if len(password) < 8:
         return False, "Password must contain at least 8 characters."
@@ -149,18 +153,16 @@ def register_user(username, password):
                 (username, password_hash, salt),
             )
 
-        return True, "Your account was created successfully."
+        return True, "Your user account was created successfully."
 
     except sqlite3.IntegrityError:
         return False, "This username already exists."
 
     except sqlite3.Error:
-        return False, (
-            "Account storage is unavailable. Please try again later."
-        )
+        return False, "Account storage is unavailable. Try again later."
 
 
-def check_login(username, password):
+def check_login(username, password, selected_role):
     try:
         with get_connection() as conn:
             row = conn.execute(
@@ -178,22 +180,67 @@ def check_login(username, password):
     if row is None:
         return None
 
-    saved_username, saved_hash, salt, role = row
+    saved_username, saved_hash, salt, saved_role = row
     entered_hash = hash_password(password, salt)
 
-    if hmac.compare_digest(entered_hash, saved_hash):
-        return saved_username, role
+    if not hmac.compare_digest(entered_hash, saved_hash):
+        return None
 
-    return None
+    # The selected login type must match the stored account role.
+    if saved_role.lower() != selected_role.lower():
+        return None
+
+    return saved_username, saved_role.lower()
 
 
-# Create the database and users table.
+# Create the database and table.
 init_database()
 
 
-# ==================================================
-# 6. LOAD AI MODEL
-# ==================================================
+# =====================================================
+# 6. CREATE THE FIRST ADMIN ACCOUNT SECURELY
+# =====================================================
+def create_initial_admin():
+    """
+    Creates an initial admin only when ADMIN_USERNAME and
+    ADMIN_PASSWORD are configured in Streamlit Secrets.
+    Existing accounts are never overwritten.
+    """
+    try:
+        admin_username = st.secrets["ADMIN_USERNAME"]
+        admin_password = st.secrets["ADMIN_PASSWORD"]
+    except (KeyError, FileNotFoundError):
+        return
+
+    admin_username = str(admin_username).strip()
+    admin_password = str(admin_password)
+
+    if not admin_username or len(admin_password) < 8:
+        return
+
+    salt = secrets.token_hex(16)
+    password_hash = hash_password(admin_password, salt)
+
+    try:
+        with get_connection() as conn:
+            conn.execute(
+                """
+                INSERT OR IGNORE INTO users
+                    (username, password_hash, salt, role)
+                VALUES (?, ?, ?, 'admin')
+                """,
+                (admin_username, password_hash, salt),
+            )
+    except sqlite3.Error:
+        pass
+
+
+create_initial_admin()
+
+
+# =====================================================
+# 7. LOAD AI MODEL
+# =====================================================
 @st.cache_resource(show_spinner=False)
 def load_model():
     import tensorflow as tf
@@ -209,32 +256,28 @@ def load_model():
     )
 
 
-# ==================================================
-# 7. PREDICT COTTON SEED QUALITY
-# ==================================================
+# =====================================================
+# 8. IMAGE PREDICTION
+# =====================================================
 def predict_image(image):
     model = load_model()
 
-    image = image.convert("RGB")
-    image = image.resize(IMAGE_SIZE)
-
+    image = image.convert("RGB").resize(IMAGE_SIZE)
     image_array = np.asarray(image, dtype=np.float32)
     image_array = np.expand_dims(image_array, axis=0)
 
-    # Assumes the model was trained with RGB pixel values
-    # in the 0–255 range, without additional normalization.
+    # This assumes training used RGB pixels in the 0–255 range.
     predictions = np.asarray(
         model.predict(image_array, verbose=0)
     )[0]
 
     if len(predictions) != len(CLASS_NAMES):
         raise ValueError(
-            "The number of model outputs does not match CLASS_NAMES."
+            "Model output count does not match the configured classes."
         )
 
     predicted_index = int(np.argmax(predictions))
     predicted_class = CLASS_NAMES[predicted_index]
-
     confidence = float(predictions[predicted_index]) * 100
 
     scores = {
@@ -245,9 +288,9 @@ def predict_image(image):
     return predicted_class, confidence, scores
 
 
-# ==================================================
-# 8. LOGIN AND SIGN-UP PAGE
-# ==================================================
+# =====================================================
+# 9. LOGIN AND SIGN-UP PAGE
+# =====================================================
 def login_page():
     st.title("🌱 Cotton Seed Quality Detection")
     st.caption("AI-based cotton seed quality classification")
@@ -260,18 +303,20 @@ def login_page():
 
         # ---------------- LOGIN ----------------
         with login_tab:
-            st.subheader("Welcome Back")
+            st.subheader("Login to Your Account")
+
+            selected_role = st.radio(
+                "Select account type",
+                ["User", "Admin"],
+                horizontal=True,
+                key="login_role",
+            )
 
             with st.form("login_form"):
-                username = st.text_input(
-                    "Username",
-                    key="login_username",
-                )
-
+                username = st.text_input("Username")
                 password = st.text_input(
                     "Password",
                     type="password",
-                    key="login_password",
                 )
 
                 login_clicked = st.form_submit_button(
@@ -283,7 +328,11 @@ def login_page():
                 if not username.strip() or not password:
                     st.warning("Enter your username and password.")
                 else:
-                    result = check_login(username, password)
+                    result = check_login(
+                        username,
+                        password,
+                        selected_role,
+                    )
 
                     if result:
                         st.session_state.username = result[0]
@@ -293,13 +342,13 @@ def login_page():
                         st.rerun()
                     else:
                         st.error(
-                            "Login failed. Check your details or "
-                            "create an account using Sign Up."
+                            "Login failed. Check your credentials "
+                            "and select the correct account type."
                         )
 
         # ---------------- SIGN UP ----------------
         with signup_tab:
-            st.subheader("Create a New Account")
+            st.subheader("Create a New User Account")
 
             with st.form("signup_form"):
                 new_username = st.text_input(
@@ -344,16 +393,16 @@ def login_page():
                     if success:
                         st.success(message)
                         st.info(
-                            "Your account is ready. Open the Login "
-                            "tab to sign in."
+                            "Your user account is ready. "
+                            "Select User in the Login tab to sign in."
                         )
                     else:
                         st.error(message)
 
 
-# ==================================================
-# 9. USER DASHBOARD
-# ==================================================
+# =====================================================
+# 10. USER DASHBOARD
+# =====================================================
 def user_dashboard():
     username = st.session_state.username
     history = st.session_state.history
@@ -362,8 +411,7 @@ def user_dashboard():
     st.subheader(f"Welcome, {username}!")
 
     st.write(
-        "View your account information and cotton seed "
-        "prediction statistics."
+        "View your account details and seed prediction statistics."
     )
 
     col1, col2 = st.columns(2)
@@ -398,18 +446,16 @@ def user_dashboard():
             st.session_state.history = []
             st.rerun()
     else:
-        st.info(
-            "No predictions yet. Open Seed Prediction to analyse an image."
-        )
+        st.info("No predictions yet. Open Seed Prediction to begin.")
 
 
-# ==================================================
-# 10. ADMIN DASHBOARD
-# ==================================================
+# =====================================================
+# 11. ADMIN DASHBOARD
+# =====================================================
 def admin_dashboard():
     st.title("🛠️ Admin Dashboard")
     st.write(
-        "View prediction records available in the current session."
+        "View prediction records available in this session."
     )
 
     history = st.session_state.history
@@ -439,15 +485,15 @@ def admin_dashboard():
         st.info("No prediction records are available in this session.")
 
 
-# ==================================================
-# 11. SEED PREDICTION PAGE
-# ==================================================
+# =====================================================
+# 12. SEED PREDICTION PAGE
+# =====================================================
 def prediction_page():
     st.title("🔬 Cotton Seed Quality Prediction")
 
     st.write(
-        "Capture a photo or upload a cotton seed image "
-        "to classify it using your trained model."
+        "Capture a photo or upload an image of cotton seeds "
+        "to classify it using your trained AI model."
     )
 
     method = st.radio(
@@ -474,7 +520,7 @@ def prediction_page():
     try:
         image = Image.open(image_file).convert("RGB")
     except Exception:
-        st.error("Unable to open this image. Choose another image.")
+        st.error("Unable to open this image. Please choose another.")
         return
 
     st.image(
@@ -505,9 +551,7 @@ def prediction_page():
 
             for class_name, score in scores.items():
                 st.write(f"**{class_name}: {score:.2f}%**")
-                st.progress(
-                    min(max(score / 100, 0.0), 1.0)
-                )
+                st.progress(min(max(score / 100, 0.0), 1.0))
 
             st.session_state.history.append({
                 "Username": st.session_state.username,
@@ -521,15 +565,15 @@ def prediction_page():
 
         except Exception as error:
             st.error(
-                "Prediction failed. Check the model file and "
-                "its preprocessing settings."
+                "Prediction failed. Check the model file, "
+                "dependencies, and preprocessing settings."
             )
             st.exception(error)
 
 
-# ==================================================
-# 12. MAIN APPLICATION
-# ==================================================
+# =====================================================
+# 13. MAIN APPLICATION
+# =====================================================
 def main():
     if not st.session_state.logged_in:
         login_page()
@@ -570,17 +614,15 @@ def main():
 
     if page == "User Dashboard":
         user_dashboard()
-
     elif page == "Admin Dashboard":
         admin_dashboard()
-
     elif page == "Seed Prediction":
         prediction_page()
 
 
-# ==================================================
-# 13. START APPLICATION
-# ==================================================
+# =====================================================
+# 14. RUN APPLICATION
+# =====================================================
 if __name__ == "__main__":
     try:
         main()
