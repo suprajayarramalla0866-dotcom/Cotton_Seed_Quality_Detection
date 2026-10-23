@@ -10,22 +10,29 @@ from datetime import datetime
 from pathlib import Path
 from PIL import Image
 
-# ---------------- PAGE CONFIGURATION ----------------
+# =====================================================
+# 1. PAGE CONFIGURATION
+# =====================================================
 st.set_page_config(
     page_title="Cotton Seed Quality Detection",
     page_icon="🌱",
     layout="wide"
 )
 
-# ---------------- PATHS AND SETTINGS ----------------
+# =====================================================
+# 2. PATHS AND MODEL SETTINGS
+# =====================================================
 BASE_DIR = Path(__file__).parent
 MODEL_PATH = BASE_DIR / "cotton_seed_mobilenetv3.keras"
 DB_PATH = BASE_DIR / "users.db"
 
+# This order must match the model's training class order.
 CLASS_NAMES = ["Broken", "Cracked", "Good"]
 IMG_SIZE = (224, 224)
 
-# ---------------- CUSTOM CSS ----------------
+# =====================================================
+# 3. CUSTOM CSS
+# =====================================================
 st.markdown("""
 <style>
 .stApp {
@@ -36,7 +43,7 @@ h1, h2, h3 {
     color: #064D25;
 }
 
-/* Dark green heading text only — no box */
+/* Dark green heading text only: no box or border */
 .app-header {
     color: #064D25;
     font-size: 2.35rem;
@@ -48,33 +55,66 @@ h1, h2, h3 {
     box-shadow: none;
 }
 
+/* Welcome screen */
+.welcome-container {
+    text-align: center;
+    padding: 65px 15px 30px 15px;
+}
+
+.welcome-logo {
+    font-size: 100px;
+    line-height: 1.2;
+    margin-bottom: 20px;
+}
+
+.welcome-title {
+    color: #064D25;
+    font-size: 2.5rem;
+    font-weight: 800;
+    line-height: 1.3;
+    margin-bottom: 18px;
+}
+
+.welcome-description {
+    color: #4D6654;
+    font-size: 1.1rem;
+    margin-bottom: 20px;
+}
+
+/* Sidebar */
 .stSidebar {
     background-color: #E4F0E5;
 }
 
+/* Buttons */
 .stButton > button {
     background-color: #064D25;
     color: white;
     border-radius: 8px;
     border: none;
+    min-height: 42px;
+    font-weight: 600;
 }
 
 .stButton > button:hover {
     background-color: #0B6B35;
     color: white;
+    border: none;
 }
 
+/* Metrics */
 [data-testid="stMetric"] {
     background-color: white;
     border-radius: 8px;
     padding: 12px;
 }
-
 </style>
 """, unsafe_allow_html=True)
 
 
-# ---------------- DATABASE ----------------
+# =====================================================
+# 4. DATABASE FUNCTIONS
+# =====================================================
 def get_connection():
     return sqlite3.connect(DB_PATH)
 
@@ -111,30 +151,25 @@ def create_user(username, password, role="user"):
 
     try:
         with get_connection() as conn:
-            conn.execute(
-                """
+            conn.execute("""
                 INSERT INTO users
                 (username, password_hash, salt, role)
                 VALUES (?, ?, ?, ?)
-                """,
-                (username, password_hash, salt, role)
-            )
-        return True, "Account created successfully."
+            """, (username, password_hash, salt, role))
+
+        return True, "Account created successfully. You can now log in."
 
     except sqlite3.IntegrityError:
-        return False, "That username already exists."
+        return False, "Username already exists. Choose another."
 
 
 def check_login(username, password, selected_role):
     with get_connection() as conn:
-        result = conn.execute(
-            """
+        result = conn.execute("""
             SELECT password_hash, salt, role
             FROM users
             WHERE username = ?
-            """,
-            (username.strip(),)
-        ).fetchone()
+        """, (username.strip(),)).fetchone()
 
     if result is None:
         return False
@@ -149,7 +184,7 @@ def check_login(username, password, selected_role):
 
 
 def initialize_admin():
-    """Create the first admin from Streamlit Secrets, if configured."""
+    """Create an admin account from Streamlit Secrets if configured."""
     try:
         admin_username = st.secrets["ADMIN_USERNAME"]
         admin_password = st.secrets["ADMIN_PASSWORD"]
@@ -169,43 +204,64 @@ def initialize_admin():
         create_user(admin_username, admin_password, "admin")
 
 
-# ---------------- MODEL ----------------
-@st.cache_resource
-def load_model():
-    if not MODEL_PATH.exists():
-        raise FileNotFoundError(
-            f"Model file not found: {MODEL_PATH.name}. "
-            "Place the model in the same folder as app.py."
-        )
+# =====================================================
+# 5. SESSION STATE
+# =====================================================
+def initialize_session():
+    defaults = {
+        "logged_in": False,
+        "username": "",
+        "role": "",
+        "show_login": False,
+        "history": []
+    }
 
-    import tensorflow as tf
-    return tf.keras.models.load_model(MODEL_PATH)
+    for key, value in defaults.items():
+        if key not in st.session_state:
+            st.session_state[key] = value
 
 
-# ---------------- HEADER ----------------
+# =====================================================
+# 6. COMMON HEADER
+# =====================================================
 def show_header():
     st.markdown(
-        '<div class="app-header">🌱 Cotton Seed Quality Detection</div>',
+        '<div class="app-header">'
+        '🌱 Cotton Seed Quality Detection'
+        '</div>',
         unsafe_allow_html=True
     )
 
 
-# ---------------- SESSION STATE ----------------
-def initialize_session():
-    if "logged_in" not in st.session_state:
-        st.session_state.logged_in = False
+# =====================================================
+# 7. WELCOME SCREEN
+# =====================================================
+def welcome_page():
+    st.markdown("""
+    <div class="welcome-container">
+        <div class="welcome-logo">🌱</div>
 
-    if "username" not in st.session_state:
-        st.session_state.username = ""
+        <div class="welcome-title">
+            Welcome to Cotton Seed Quality Detection App
+        </div>
 
-    if "role" not in st.session_state:
-        st.session_state.role = ""
+        <div class="welcome-description">
+            Smart cotton seed quality analysis using image processing
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
 
-    if "history" not in st.session_state:
-        st.session_state.history = []
+    left, center, right = st.columns([1, 1.5, 1])
+
+    with center:
+        if st.button("Get Started →", use_container_width=True):
+            st.session_state.show_login = True
+            st.rerun()
 
 
-# ---------------- LOGIN / SIGNUP ----------------
+# =====================================================
+# 8. LOGIN AND SIGNUP
+# =====================================================
 def login_page():
     show_header()
 
@@ -214,6 +270,7 @@ def login_page():
 
     login_tab, signup_tab = st.tabs(["Login", "Sign Up"])
 
+    # ---------------- LOGIN ----------------
     with login_tab:
         st.subheader("Welcome Back")
 
@@ -242,8 +299,11 @@ def login_page():
                 st.session_state.role = role.lower()
                 st.rerun()
             else:
-                st.error("Invalid username, password, or selected role.")
+                st.error(
+                    "Invalid username, password, or selected role."
+                )
 
+    # ---------------- SIGNUP ----------------
     with signup_tab:
         st.subheader("Create a User Account")
 
@@ -265,10 +325,15 @@ def login_page():
         )
 
         if st.button("Create Account", use_container_width=True):
-            if len(new_password) < 8:
-                st.error("Use a password with at least 8 characters.")
+            if not new_username.strip():
+                st.error("Please enter a username.")
+
+            elif len(new_password) < 8:
+                st.error("Password must contain at least 8 characters.")
+
             elif new_password != confirm_password:
                 st.error("Passwords do not match.")
+
             else:
                 success, message = create_user(
                     new_username,
@@ -282,7 +347,25 @@ def login_page():
                     st.error(message)
 
 
-# ---------------- IMAGE PREPROCESSING ----------------
+# =====================================================
+# 9. LOAD MODEL
+# =====================================================
+@st.cache_resource
+def load_model():
+    if not MODEL_PATH.exists():
+        raise FileNotFoundError(
+            f"Model file not found: {MODEL_PATH.name}. "
+            "Place the model in the same folder as app.py."
+        )
+
+    import tensorflow as tf
+
+    return tf.keras.models.load_model(MODEL_PATH)
+
+
+# =====================================================
+# 10. IMAGE PREPROCESSING AND PREDICTION
+# =====================================================
 def preprocess_image(image):
     image = image.convert("RGB")
     image = image.resize(IMG_SIZE)
@@ -293,7 +376,6 @@ def preprocess_image(image):
     return image_array
 
 
-# ---------------- PREDICTION ----------------
 def predict_seed(image):
     model = load_model()
     processed_image = preprocess_image(image)
@@ -304,23 +386,47 @@ def predict_seed(image):
     )
 
     scores = np.asarray(predictions[0], dtype=float)
-    predicted_index = int(np.argmax(scores))
 
-    if predicted_index >= len(CLASS_NAMES):
+    if len(scores) != len(CLASS_NAMES):
         raise ValueError(
-            "The number of model outputs does not match CLASS_NAMES."
+            "Model output count does not match CLASS_NAMES. "
+            "Check the model's class order."
         )
+
+    predicted_index = int(np.argmax(scores))
 
     return CLASS_NAMES[predicted_index], scores
 
 
-# ---------------- USER DASHBOARD ----------------
+# =====================================================
+# 11. USER DASHBOARD
+# =====================================================
 def user_dashboard():
-    st.subheader(f"👤 {st.session_state.username}'s Dashboard")
+    st.title("👤 User Dashboard")
+    st.write(f"Welcome, **{st.session_state.username}**!")
+
+    user_history = [
+        item for item in st.session_state.history
+        if item["username"] == st.session_state.username
+    ]
+
+    col1, col2 = st.columns(2)
+
+    col1.metric(
+        "Your Predictions",
+        len(user_history)
+    )
+
+    col2.metric(
+        "Available Classes",
+        len(CLASS_NAMES)
+    )
+
+    st.subheader("Seed Quality Detection")
 
     st.write(
-        "Upload a cotton seed image or capture one using your camera "
-        "to identify its predicted quality category."
+        "Capture a cotton seed image or upload one from your device "
+        "to predict its quality category."
     )
 
     camera_image = st.camera_input(
@@ -334,7 +440,11 @@ def user_dashboard():
         key="uploaded_image"
     )
 
-    image_file = uploaded_image if uploaded_image is not None else camera_image
+    image_file = (
+        uploaded_image
+        if uploaded_image is not None
+        else camera_image
+    )
 
     if image_file is not None:
         try:
@@ -346,40 +456,83 @@ def user_dashboard():
                 width=350
             )
 
-            if st.button("Predict Seed Quality", use_container_width=True):
+            if st.button(
+                "Predict Seed Quality",
+                use_container_width=True
+            ):
                 with st.spinner("Analyzing image..."):
                     predicted_class, scores = predict_seed(image)
 
                 confidence = float(scores.max()) * 100
 
-                st.success(f"Predicted quality: {predicted_class}")
-                st.metric("Prediction confidence", f"{confidence:.2f}%")
+                st.success(
+                    f"Predicted quality: {predicted_class}"
+                )
+
+                st.metric(
+                    "Prediction Confidence",
+                    f"{confidence:.2f}%"
+                )
 
                 st.subheader("Class Scores")
 
                 for index, class_name in enumerate(CLASS_NAMES):
-                    if index < len(scores):
-                        st.write(
-                            f"**{class_name}:** "
-                            f"{float(scores[index]) * 100:.2f}%"
-                        )
-                        st.progress(
-                            min(max(float(scores[index]), 0.0), 1.0)
-                        )
+                    score = float(scores[index])
+
+                    st.write(
+                        f"**{class_name}:** {score * 100:.2f}%"
+                    )
+
+                    st.progress(
+                        min(max(score, 0.0), 1.0)
+                    )
 
                 st.session_state.history.append({
                     "username": st.session_state.username,
-                    "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    "time": datetime.now().strftime(
+                        "%Y-%m-%d %H:%M:%S"
+                    ),
                     "prediction": predicted_class,
                     "confidence": f"{confidence:.2f}%"
                 })
+
+                st.rerun()
 
         except Exception as error:
             st.error("Unable to process this image.")
             st.exception(error)
 
     st.divider()
-    st.subheader("Your Current Session History")
+    st.subheader("Recent Predictions")
+
+    # Refresh history after a prediction
+    user_history = [
+        item for item in st.session_state.history
+        if item["username"] == st.session_state.username
+    ]
+
+    if user_history:
+        st.dataframe(
+            [
+                {
+                    "Time": item["time"],
+                    "Prediction": item["prediction"],
+                    "Confidence": item["confidence"]
+                }
+                for item in reversed(user_history)
+            ],
+            use_container_width=True,
+            hide_index=True
+        )
+    else:
+        st.info("You have not made any predictions yet.")
+
+
+# =====================================================
+# 12. SEPARATE PREDICTION HISTORY PAGE
+# =====================================================
+def prediction_history_page():
+    st.title("📋 Prediction History")
 
     user_history = [
         item for item in st.session_state.history
@@ -400,32 +553,45 @@ def user_dashboard():
             hide_index=True
         )
     else:
-        st.info("No predictions have been made in this session yet.")
+        st.info("You have not made any predictions yet.")
 
 
-# ---------------- ADMIN DASHBOARD ----------------
+# =====================================================
+# 13. ADMIN DASHBOARD
+# =====================================================
 def admin_dashboard():
-    st.subheader("🛡️ Admin Dashboard")
+    st.title("🛡️ Admin Dashboard")
+    st.write("Welcome to the administration panel.")
 
     with get_connection() as conn:
-        users = conn.execute(
-            "SELECT username, role FROM users ORDER BY username"
-        ).fetchall()
+        users = conn.execute("""
+            SELECT username, role
+            FROM users
+            ORDER BY username
+        """).fetchall()
 
     col1, col2 = st.columns(2)
 
-    col1.metric("Registered Accounts", len(users))
+    col1.metric(
+        "Registered Accounts",
+        len(users)
+    )
+
     col2.metric(
         "Predictions in Current Session",
         len(st.session_state.history)
     )
 
+    st.divider()
     st.subheader("Registered Accounts")
 
     if users:
         st.dataframe(
             [
-                {"Username": username, "Role": role.title()}
+                {
+                    "Username": username,
+                    "Role": role.title()
+                }
                 for username, role in users
             ],
             use_container_width=True,
@@ -434,6 +600,7 @@ def admin_dashboard():
     else:
         st.info("No registered accounts found.")
 
+    st.divider()
     st.subheader("Prediction History — Current Session")
 
     if st.session_state.history:
@@ -454,20 +621,46 @@ def admin_dashboard():
         st.info("No predictions have been made in this session.")
 
 
-# ---------------- MAIN APPLICATION ----------------
+# =====================================================
+# 14. MAIN APPLICATION AND NAVIGATION
+# =====================================================
 def main():
     initialize_database()
     initialize_admin()
     initialize_session()
 
+    # Show welcome page before login
     if not st.session_state.logged_in:
-        login_page()
+        if st.session_state.show_login:
+            login_page()
+        else:
+            welcome_page()
+
         return
 
+    # Sidebar navigation
     with st.sidebar:
         st.markdown("## 🌱 Cotton Seed App")
+
         st.write(f"**Username:** {st.session_state.username}")
         st.write(f"**Role:** {st.session_state.role.title()}")
+
+        st.divider()
+
+        if st.session_state.role == "admin":
+            pages = ["Admin Dashboard"]
+        else:
+            pages = [
+                "User Dashboard",
+                "Seed Prediction",
+                "Prediction History"
+            ]
+
+        selected_page = st.radio(
+            "Navigation",
+            pages,
+            key="dashboard_navigation"
+        )
 
         st.divider()
 
@@ -475,21 +668,40 @@ def main():
             st.session_state.logged_in = False
             st.session_state.username = ""
             st.session_state.role = ""
+            st.session_state.show_login = False
             st.rerun()
 
+    # Main page heading
     show_header()
     st.caption("AI-based cotton seed quality analysis")
     st.divider()
 
-    if st.session_state.role == "admin":
-        admin_dashboard()
-    else:
-        user_dashboard()
+    # ---------------- USER PAGES ----------------
+    if st.session_state.role == "user":
+
+        if selected_page == "User Dashboard":
+            user_dashboard()
+
+        elif selected_page == "Seed Prediction":
+            st.title("🌱 Seed Prediction")
+            user_dashboard()
+
+        elif selected_page == "Prediction History":
+            prediction_history_page()
+
+    # ---------------- ADMIN PAGE ----------------
+    elif st.session_state.role == "admin":
+
+        if selected_page == "Admin Dashboard":
+            admin_dashboard()
 
 
-# ---------------- RUN APPLICATION ----------------
+# =====================================================
+# 15. START APPLICATION
+# =====================================================
 try:
     main()
+
 except Exception as error:
     st.error("The application encountered an error.")
     st.exception(error)
