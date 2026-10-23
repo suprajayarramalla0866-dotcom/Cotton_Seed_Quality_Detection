@@ -49,7 +49,22 @@ def login_user(username, password):
 
 
 if not st.session_state.logged_in:
-    st.title("🌱 Cotton Seed Quality Detection")
+   st.markdown(
+    """
+    <div style="text-align:center; padding:20px;
+                background:linear-gradient(135deg,#e8f5e9,#ffffff);
+                border-radius:16px; border:1px solid #b7dfb9;">
+        <div style="font-size:48px;">🌿</div>
+        <h1 style="color:#17652a; margin-bottom:4px;">
+            Cotton Seed Quality Detection
+        </h1>
+        <p style="color:#367747; font-style:italic;">
+            Smart Seeds. Better Harvest.
+        </p>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
     st.subheader("Login to continue")
 
     with st.form("login_form"):
