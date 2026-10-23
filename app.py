@@ -5,21 +5,69 @@ import numpy as np
 import hmac
 from PIL import Image
 
+# --------------------------------------------------
+# PAGE CONFIGURATION
+# --------------------------------------------------
 st.set_page_config(
     page_title="Cotton Seed Quality Detection",
     page_icon="🌱",
     layout="centered"
 )
 
+# --------------------------------------------------
+# AGRICULTURE THEME STYLING
+# --------------------------------------------------
+st.markdown(
+    """
+    <style>
+    .stApp {
+        background-color: #ffffff;
+    }
 
+    h1, h2, h3, h4 {
+        color: #216e39;
+    }
+
+    div.stButton > button {
+        background-color: #218838;
+        color: white;
+        border: 1px solid #218838;
+        border-radius: 8px;
+        font-weight: 600;
+    }
+
+    div.stButton > button:hover {
+        background-color: #17652a;
+        color: white;
+        border: 1px solid #17652a;
+    }
+
+    div[data-testid="stSidebar"] {
+        background-color: #edf7ed;
+    }
+
+    div[data-testid="stSidebar"] h1,
+    div[data-testid="stSidebar"] h2,
+    div[data-testid="stSidebar"] h3 {
+        color: #17652a;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
+
+# --------------------------------------------------
+# LOAD AI MODEL
+# --------------------------------------------------
 @st.cache_resource
 def load_model():
     return tf.keras.models.load_model(
         "cotton_seed_mobilenetv3.keras"
     )
 
-
-# Initialize session state
+# --------------------------------------------------
+# INITIALIZE SESSION STATE
+# --------------------------------------------------
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
 
@@ -32,8 +80,9 @@ if "role" not in st.session_state:
 if "history" not in st.session_state:
     st.session_state.history = []
 
-
-# Check login credentials
+# --------------------------------------------------
+# LOGIN FUNCTION
+# --------------------------------------------------
 def login_user(username, password):
     users = st.secrets["users"]
 
@@ -49,14 +98,16 @@ def login_user(username, password):
 
     return None
 
-
+# --------------------------------------------------
 # LOGIN PAGE
+# --------------------------------------------------
 if not st.session_state.logged_in:
     st.markdown(
         """
-        <div style="text-align:center; padding:20px;
+        <div style="text-align:center; padding:24px;
                     background:linear-gradient(135deg,#e8f5e9,#ffffff);
-                    border-radius:16px; border:1px solid #b7dfb9;">
+                    border-radius:16px;
+                    border:1px solid #b7dfb9;">
             <div style="font-size:48px;">🌿</div>
             <h1 style="color:#17652a; margin-bottom:4px;">
                 Cotton Seed Quality Detection
@@ -94,11 +145,12 @@ if not st.session_state.logged_in:
 
     st.stop()
 
-
-# AGRICULTURE THEME HEADER
+# --------------------------------------------------
+# AGRICULTURE HEADER
+# --------------------------------------------------
 st.markdown(
     """
-    <div style="padding:18px 20px;
+    <div style="padding:20px;
                 background:linear-gradient(120deg,#14532d,#2e7d32);
                 border-radius:14px;
                 margin-bottom:20px;">
@@ -119,11 +171,12 @@ st.write(
     f"Welcome, **{st.session_state.username}**!"
 )
 
-
+# --------------------------------------------------
 # ROLE-BASED NAVIGATION
+# --------------------------------------------------
 if role == "admin":
     page = st.sidebar.radio(
-        "Navigation",
+        "🌱 Navigation",
         [
             "Admin Dashboard",
             "User Dashboard",
@@ -132,26 +185,44 @@ if role == "admin":
     )
 else:
     page = st.sidebar.radio(
-        "Navigation",
+        "🌱 Navigation",
         [
             "User Dashboard",
             "Seed Prediction"
         ]
     )
 
+# --------------------------------------------------
+# GREEN LOGOUT BUTTON FOR BOTH ROLES
+# --------------------------------------------------
+st.sidebar.markdown(
+    """
+    <div style="padding:8px 0 4px 0;
+                color:#216e39; font-weight:600;">
+        Account
+    </div>
+    """,
+    unsafe_allow_html=True
+)
 
-# LOGOUT
-if st.sidebar.button("Logout"):
+if st.sidebar.button(
+    "🚪 Logout",
+    key="logout_button",
+    use_container_width=True
+):
     st.session_state.logged_in = False
     st.session_state.username = ""
     st.session_state.role = ""
+    st.session_state.history = []
     st.rerun()
 
-
+# --------------------------------------------------
 # USER DASHBOARD
+# --------------------------------------------------
 if page == "User Dashboard":
     st.markdown(
-        '<h2 style="color:#216e39;">🌱 Seed Shop Owner Dashboard</h2>',
+        '<h2 style="color:#216e39;">'
+        '🌱 Seed Shop Owner Dashboard</h2>',
         unsafe_allow_html=True
     )
 
@@ -159,21 +230,29 @@ if page == "User Dashboard":
         "Welcome to your cotton seed quality workspace."
     )
 
-    total_predictions = len(st.session_state.history)
+    history = st.session_state.history
+
+    total_predictions = len(history)
     good_count = sum(
-        1 for item in st.session_state.history
+        1 for item in history
         if item["Quality"] == "Good"
     )
-    damaged_count = sum(
-        1 for item in st.session_state.history
-        if item["Quality"] in ["Broken", "Cracked"]
+    broken_count = sum(
+        1 for item in history
+        if item["Quality"] == "Broken"
+    )
+    cracked_count = sum(
+        1 for item in history
+        if item["Quality"] == "Cracked"
     )
 
-    col1, col2, col3 = st.columns(3)
-
+    col1, col2 = st.columns(2)
     col1.metric("Total Predictions", total_predictions)
     col2.metric("Good Seeds", good_count)
-    col3.metric("Damaged Seeds", damaged_count)
+
+    col3, col4 = st.columns(2)
+    col3.metric("Broken Seeds", broken_count)
+    col4.metric("Cracked Seeds", cracked_count)
 
     st.markdown(
         """
@@ -181,33 +260,44 @@ if page == "User Dashboard":
                     background:#edf7ed;
                     border:1px solid #c8e6c9;
                     border-radius:12px;">
-            <h4 style="color:#216e39;">🌾 How to get started</h4>
+            <h4 style="color:#216e39;">
+                🌾 Start Seed Analysis
+            </h4>
             <p style="color:#315b3a;">
-                Open Seed Prediction from the sidebar, upload a
-                cotton seed image, and click Predict Seed Quality.
+                Select Seed Prediction from the sidebar to upload
+                a cotton seed image and analyze its quality.
             </p>
         </div>
         """,
         unsafe_allow_html=True
     )
 
-    st.subheader("📋 Recent Prediction History")
+    st.subheader("📋 Prediction History")
 
     if st.session_state.history:
         st.dataframe(
             st.session_state.history,
             use_container_width=True
         )
+
+        if st.button(
+            "🗑️ Clear Prediction History",
+            key="clear_user_history"
+        ):
+            st.session_state.history = []
+            st.rerun()
     else:
         st.info(
             "No predictions yet. Start by analyzing a seed image."
         )
 
-
+# --------------------------------------------------
 # ADMIN DASHBOARD
+# --------------------------------------------------
 elif page == "Admin Dashboard":
     st.markdown(
-        '<h2 style="color:#216e39;">🛡️ Administrator Dashboard</h2>',
+        '<h2 style="color:#216e39;">'
+        '🛡️ Administrator Dashboard</h2>',
         unsafe_allow_html=True
     )
 
@@ -226,7 +316,10 @@ elif page == "Admin Dashboard":
             use_container_width=True
         )
 
-        if st.button("Clear Prediction History"):
+        if st.button(
+            "🗑️ Clear Prediction History",
+            key="clear_admin_history"
+        ):
             st.session_state.history = []
             st.rerun()
     else:
@@ -234,8 +327,9 @@ elif page == "Admin Dashboard":
             "No predictions recorded in this session."
         )
 
-
+# --------------------------------------------------
 # SEED PREDICTION PAGE
+# --------------------------------------------------
 elif page == "Seed Prediction":
     st.markdown(
         """
@@ -263,7 +357,10 @@ elif page == "Seed Prediction":
             use_container_width=True
         )
 
-        if st.button("Predict Seed Quality"):
+        if st.button(
+            "🌿 Predict Seed Quality",
+            key="predict_seed"
+        ):
             with st.spinner("Analyzing image..."):
                 model = load_model()
 
@@ -292,7 +389,8 @@ elif page == "Seed Prediction":
                 })
 
             st.markdown(
-                '<h2 style="color:#216e39;">🌿 Prediction Result</h2>',
+                '<h2 style="color:#216e39;">'
+                '🌿 Prediction Result</h2>',
                 unsafe_allow_html=True
             )
 
@@ -329,6 +427,13 @@ elif page == "Seed Prediction":
             st.session_state.history,
             use_container_width=True
         )
+
+        if st.button(
+            "🗑️ Clear Prediction History",
+            key="clear_prediction_history"
+        ):
+            st.session_state.history = []
+            st.rerun()
     else:
         st.info(
             "No predictions yet. Upload an image to begin."
