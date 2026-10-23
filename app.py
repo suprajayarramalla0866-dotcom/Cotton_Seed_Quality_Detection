@@ -96,7 +96,23 @@ if not st.session_state.logged_in:
 
 
 
-st.title("🌱 Cotton Seed Quality Detection")
+st.markdown(
+    """
+    <div style="padding:18px 20px;
+                background:linear-gradient(120deg,#14532d,#2e7d32);
+                border-radius:14px;
+                margin-bottom:20px;">
+        <h1 style="color:white; margin:0;">
+            🌿 Cotton Seed Quality Detection
+        </h1>
+        <p style="color:#e8f5e9; margin:8px 0 0 0;">
+            Smart Seeds. Better Harvest.
+        </p>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
+
 
 role = st.session_state.role
 st.write(
