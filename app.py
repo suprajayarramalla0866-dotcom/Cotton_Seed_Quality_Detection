@@ -19,6 +19,7 @@ def load_model():
     )
 
 
+# Initialize session state
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
 
@@ -32,6 +33,7 @@ if "history" not in st.session_state:
     st.session_state.history = []
 
 
+# Check login credentials
 def login_user(username, password):
     users = st.secrets["users"]
 
@@ -48,7 +50,7 @@ def login_user(username, password):
     return None
 
 
-
+# LOGIN PAGE
 if not st.session_state.logged_in:
     st.markdown(
         """
@@ -80,9 +82,7 @@ if not st.session_state.logged_in:
         )
 
     if submitted:
-        role = login_user(
-            username.strip(), password
-        )
+        role = login_user(username.strip(), password)
 
         if role:
             st.session_state.logged_in = True
@@ -95,7 +95,7 @@ if not st.session_state.logged_in:
     st.stop()
 
 
-
+# AGRICULTURE THEME HEADER
 st.markdown(
     """
     <div style="padding:18px 20px;
@@ -113,20 +113,34 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-
 role = st.session_state.role
+
 st.write(
     f"Welcome, **{st.session_state.username}**!"
 )
 
+
+# ROLE-BASED NAVIGATION
 if role == "admin":
     page = st.sidebar.radio(
         "Navigation",
-        ["Admin Dashboard", "Seed Prediction"]
+        [
+            "Admin Dashboard",
+            "User Dashboard",
+            "Seed Prediction"
+        ]
     )
 else:
-    page = "Seed Prediction"
+    page = st.sidebar.radio(
+        "Navigation",
+        [
+            "User Dashboard",
+            "Seed Prediction"
+        ]
+    )
 
+
+# LOGOUT
 if st.sidebar.button("Logout"):
     st.session_state.logged_in = False
     st.session_state.username = ""
@@ -134,17 +148,79 @@ if st.sidebar.button("Logout"):
     st.rerun()
 
 
-if page == "Admin Dashboard":
-    st.subheader("🛡️ Administrator Dashboard")
+# USER DASHBOARD
+if page == "User Dashboard":
+    st.markdown(
+        '<h2 style="color:#216e39;">🌱 Seed Shop Owner Dashboard</h2>',
+        unsafe_allow_html=True
+    )
+
+    st.write(
+        "Welcome to your cotton seed quality workspace."
+    )
+
+    total_predictions = len(st.session_state.history)
+    good_count = sum(
+        1 for item in st.session_state.history
+        if item["Quality"] == "Good"
+    )
+    damaged_count = sum(
+        1 for item in st.session_state.history
+        if item["Quality"] in ["Broken", "Cracked"]
+    )
+
+    col1, col2, col3 = st.columns(3)
+
+    col1.metric("Total Predictions", total_predictions)
+    col2.metric("Good Seeds", good_count)
+    col3.metric("Damaged Seeds", damaged_count)
+
+    st.markdown(
+        """
+        <div style="padding:16px;
+                    background:#edf7ed;
+                    border:1px solid #c8e6c9;
+                    border-radius:12px;">
+            <h4 style="color:#216e39;">🌾 How to get started</h4>
+            <p style="color:#315b3a;">
+                Open Seed Prediction from the sidebar, upload a
+                cotton seed image, and click Predict Seed Quality.
+            </p>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+    st.subheader("📋 Recent Prediction History")
+
+    if st.session_state.history:
+        st.dataframe(
+            st.session_state.history,
+            use_container_width=True
+        )
+    else:
+        st.info(
+            "No predictions yet. Start by analyzing a seed image."
+        )
+
+
+# ADMIN DASHBOARD
+elif page == "Admin Dashboard":
+    st.markdown(
+        '<h2 style="color:#216e39;">🛡️ Administrator Dashboard</h2>',
+        unsafe_allow_html=True
+    )
+
     st.write("Login role: Administrator")
 
     st.metric(
-        "Predictions in this session",
+        "Predictions in This Session",
         len(st.session_state.history)
     )
 
     if st.session_state.history:
         st.subheader("Recent Prediction History")
+
         st.dataframe(
             st.session_state.history,
             use_container_width=True
@@ -154,20 +230,24 @@ if page == "Admin Dashboard":
             st.session_state.history = []
             st.rerun()
     else:
-        st.info("No predictions recorded in this session.")
+        st.info(
+            "No predictions recorded in this session."
+        )
 
-else:
+
+# SEED PREDICTION PAGE
+elif page == "Seed Prediction":
     st.markdown(
-    """
-    <h2 style="color:#216e39;">
-        🌱 Seed Quality Prediction
-    </h2>
-    <p style="color:#50765a;">
-        Upload a cotton seed image to analyze its quality.
-    </p>
-    """,
-    unsafe_allow_html=True
-)
+        """
+        <h2 style="color:#216e39;">
+            🌱 Seed Quality Prediction
+        </h2>
+        <p style="color:#50765a;">
+            Upload a cotton seed image to analyze its quality.
+        </p>
+        """,
+        unsafe_allow_html=True
+    )
 
     uploaded_file = st.file_uploader(
         "Choose a cotton seed image",
@@ -211,12 +291,10 @@ else:
                     "Confidence": f"{confidence:.2f}%"
                 })
 
-           
             st.markdown(
                 '<h2 style="color:#216e39;">🌿 Prediction Result</h2>',
                 unsafe_allow_html=True
             )
-
 
             if predicted_class == "Good":
                 st.success("Quality: GOOD")
@@ -234,9 +312,11 @@ else:
 
             for i, name in enumerate(classes):
                 score = float(predictions[i])
+
                 st.write(
                     f"**{name}:** {score * 100:.2f}%"
                 )
+
                 st.progress(
                     max(0.0, min(1.0, score))
                 )
@@ -250,4 +330,6 @@ else:
             use_container_width=True
         )
     else:
-        st.info("No predictions yet. Upload an image to begin.")
+        st.info(
+            "No predictions yet. Upload an image to begin."
+        )
