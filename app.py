@@ -1,455 +1,331 @@
 
-import streamlit as st
-import tensorflow as tf
-import numpy as np
 import hmac
+from datetime import datetime
+
+import numpy as np
+import streamlit as st
 from PIL import Image
 
-# ==================================================
-# 1. PAGE CONFIGURATION
-# ==================================================
+# ---------------- PAGE CONFIG ----------------
 st.set_page_config(
     page_title="Cotton Seed Quality Detection",
     page_icon="🌱",
-    layout="wide"
+    layout="wide",
 )
 
-# ==================================================
-# 2. GREEN AND WHITE THEME
-# ==================================================
-st.markdown("""
-<style>
-.stApp {
-    background-color: #FFFFFF;
-    color: #183D20;
+# ---------------- DESIGN ----------------
+st.markdown(
+    """
+    <style>
+    .stApp {
+        background-color: #f7fbf7;
+    }
+    h1, h2, h3 {
+        color: #176b35;
+    }
+    [data-testid="stSidebar"] {
+        background-color: #e7f4e8;
+    }
+    div.stButton > button {
+        background-color: #198754;
+        color: white;
+        border-radius: 8px;
+        border: none;
+        min-height: 40px;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+MODEL_PATH = "cotton_seed_mobilenetv3.keras"
+IMAGE_SIZE = (224, 224)
+
+# Must match the class order used when training your model.
+CLASS_NAMES = ["Broken", "Cracked", "Good"]
+
+
+# ---------------- SESSION STATE ----------------
+defaults = {
+    "logged_in": False,
+    "username": "",
+    "role": "",
+    "history": [],
 }
 
-[data-testid="stSidebar"] {
-    background-color: #EDF7ED;
-}
+for key, value in defaults.items():
+    if key not in st.session_state:
+        st.session_state[key] = value
 
-h1, h2, h3 {
-    color: #218838 !important;
-}
 
-div.stButton > button {
-    background-color: #218838;
-    color: white;
-    border: none;
-    border-radius: 8px;
-    font-weight: bold;
-}
-
-div.stButton > button:hover {
-    background-color: #176B2C;
-    color: white;
-}
-
-div[data-testid="stFormSubmitButton"] button {
-    background-color: #218838;
-    color: white;
-    border-radius: 8px;
-    font-weight: bold;
-}
-</style>
-""", unsafe_allow_html=True)
-
-# ==================================================
-# 3. SESSION STATE
-# ==================================================
-if "logged_in" not in st.session_state:
-    st.session_state.logged_in = False
-
-if "username" not in st.session_state:
-    st.session_state.username = ""
-
-if "role" not in st.session_state:
-    st.session_state.role = ""
-
-if "history" not in st.session_state:
-    st.session_state.history = []
-
-# ==================================================
-# 4. LOAD TRAINED MODEL
-# ==================================================
+# ---------------- MODEL ----------------
 @st.cache_resource
 def load_model():
+    import tensorflow as tf
     return tf.keras.models.load_model(
-        "cotton_seed_mobilenetv3.keras"
+        MODEL_PATH,
+        compile=False,
     )
 
-# ==================================================
-# 5. AUTHENTICATION
-# ==================================================
-def authenticate(username, password):
-    users = st.secrets.get("users", {})
 
-    for saved_username, details in users.items():
-        if not isinstance(details, dict):
-            continue
+# ---------------- LOGIN ----------------
+def check_login(username, password):
+    try:
+        users = st.secrets["users"]
 
-        saved_password = str(details.get("password", ""))
-        saved_role = str(details.get("role", "user")).lower()
+        for saved_username, details in users.items():
+            saved_password = str(details["password"])
 
-        if (
-            hmac.compare_digest(username, str(saved_username))
-            and hmac.compare_digest(password, saved_password)
-        ):
-            return True, str(saved_username), saved_role
+            if (
+                hmac.compare_digest(username, str(saved_username))
+                and hmac.compare_digest(password, saved_password)
+            ):
+                return str(saved_username), str(
+                    details.get("role", "user")
+                ).lower()
 
-    return False, "", ""
+    except (KeyError, TypeError):
+        return None
+
+    return None
 
 
-# ==================================================
-# 6. LOGIN PAGE
-# ==================================================
-if not st.session_state.logged_in:
+def login_page():
     st.title("🌱 Cotton Seed Quality Detection")
-    st.subheader("AI-Based Cotton Seed Quality Analysis")
+    st.write("AI-based cotton seed quality classification")
     st.divider()
 
-    st.subheader("Login to Your Account")
+    _, center, _ = st.columns([1, 1.4, 1])
 
-    with st.form("login_form"):
-        username = st.text_input("Username")
-        password = st.text_input("Password", type="password")
+    with center:
+        st.subheader("Login to Your Account")
 
-        submitted = st.form_submit_button(
-            "Login",
-            use_container_width=True
-        )
-
-    if submitted:
-        if not username.strip() or not password:
-            st.error("Please enter your username and password.")
-        else:
-            success, saved_username, saved_role = authenticate(
-                username.strip(),
-                password
+        with st.form("login_form"):
+            username = st.text_input("Username")
+            password = st.text_input("Password", type="password")
+            submitted = st.form_submit_button(
+                "Login",
+                use_container_width=True,
             )
 
-            if success:
-                st.session_state.logged_in = True
-
-                # Use the configured account username
-                # throughout the application.
-                st.session_state.username = saved_username
-                st.session_state.role = saved_role
-                st.session_state.history = []
-
-                st.rerun()
+        if submitted:
+            if not username.strip() or not password:
+                st.warning("Enter both username and password.")
             else:
-                st.error("Invalid username or password.")
+                result = check_login(username.strip(), password)
 
-    st.stop()
+                if result:
+                    st.session_state.username = result[0]
+                    st.session_state.role = result[1]
+                    st.session_state.logged_in = True
+                    st.session_state.history = []
+                    st.rerun()
+                else:
+                    st.error(
+                        "Login failed. Check your username, password, "
+                        "and Streamlit Secrets."
+                    )
 
 
-# ==================================================
-# 7. APPLICATION HEADER
-# ==================================================
-st.title("🌱 Cotton Seed Quality Detection")
-st.caption("AI-Powered Cotton Seed Quality Analysis")
-st.divider()
+# ---------------- PREDICTION ----------------
+def predict_image(image):
+    model = load_model()
 
+    image = image.convert("RGB").resize(IMAGE_SIZE)
+    array = np.asarray(image, dtype=np.float32)
+    array = np.expand_dims(array, axis=0)
 
-# ==================================================
-# 8. SIDEBAR AND LOGOUT
-# ==================================================
-with st.sidebar:
-    st.title("🌱 Navigation")
+    # Assumes the model was trained on RGB pixel values in the 0–255 range.
+    output = np.asarray(model.predict(array, verbose=0))[0]
 
-    st.write("**Logged-in Username:**")
-    st.success(st.session_state.username)
-
-    st.write("**Role:**")
-    st.info(st.session_state.role.title())
-
-    if st.session_state.role == "admin":
-        page = st.radio(
-            "Choose a page",
-            [
-                "Logged-in User Dashboard",
-                "Admin Dashboard",
-                "Seed Prediction"
-            ]
+    if len(output) != len(CLASS_NAMES):
+        raise ValueError(
+            "Model output count does not match CLASS_NAMES."
         )
+
+    index = int(np.argmax(output))
+    label = CLASS_NAMES[index]
+
+    # Appropriate for a softmax output model.
+    confidence = float(output[index]) * 100
+
+    scores = {
+        CLASS_NAMES[i]: float(output[i]) * 100
+        for i in range(len(CLASS_NAMES))
+    }
+
+    return label, confidence, scores
+
+
+def prediction_page():
+    st.header("🔬 Seed Quality Prediction")
+    st.write("Capture a photo or upload a cotton seed image.")
+
+    method = st.radio(
+        "Select image source",
+        ["Capture Photo", "Upload Image"],
+        horizontal=True,
+    )
+
+    uploaded_image = None
+
+    if method == "Capture Photo":
+        uploaded_image = st.camera_input("Capture cotton seeds")
     else:
-        page = st.radio(
-            "Choose a page",
-            [
-                "Logged-in User Dashboard",
-                "Seed Prediction"
-            ]
+        uploaded_image = st.file_uploader(
+            "Choose an image",
+            type=["jpg", "jpeg", "png"],
         )
 
-    st.divider()
+    if uploaded_image is None:
+        return
 
-    if st.button("Logout", use_container_width=True):
-        st.session_state.logged_in = False
-        st.session_state.username = ""
-        st.session_state.role = ""
-        st.session_state.history = []
-        st.rerun()
+    try:
+        image = Image.open(uploaded_image).convert("RGB")
+        st.image(image, caption="Selected Image", width=350)
+    except Exception:
+        st.error("The selected file is not a valid image.")
+        return
 
-# ==================================================
-# 9. USERNAME-BASED DASHBOARD
-# ==================================================
-if page == "Logged-in User Dashboard":
+    if st.button("Predict Seed Quality", use_container_width=True):
+        try:
+            with st.spinner("Analysing the image..."):
+                label, confidence, scores = predict_image(image)
 
+            st.subheader("Prediction Result")
+
+            if label == "Good":
+                st.success(f"Quality: {label}")
+            else:
+                st.warning(f"Quality: {label}")
+
+            st.metric("Confidence", f"{confidence:.2f}%")
+
+            st.subheader("Class Scores")
+            for name, score in scores.items():
+                st.write(f"**{name}: {score:.2f}%**")
+                st.progress(min(max(score / 100, 0.0), 1.0))
+
+            st.session_state.history.append({
+                "Username": st.session_state.username,
+                "Quality": label,
+                "Confidence": f"{confidence:.2f}%",
+                "Date and Time": datetime.now().strftime(
+                    "%Y-%m-%d %H:%M:%S"
+                ),
+            })
+
+        except Exception as error:
+            st.error("Prediction could not be completed.")
+            st.exception(error)
+
+
+# ---------------- USER DASHBOARD ----------------
+def user_dashboard():
     username = st.session_state.username
+    history = st.session_state.history
 
     st.title(f"👤 {username}'s Dashboard")
-
     st.subheader(f"Welcome, {username}!")
+    st.write("View your account details and prediction statistics.")
 
-    st.write(
-        "View your account information and cotton seed "
-        "prediction statistics."
-    )
-    st.write("Your account information")
-
-    col1, col2 = st.columns(2)
-
-    with col1:
-        st.metric(
-            "Username",
-            st.session_state.username
-        )
-
-    with col2:
-        st.metric(
-            "Account Role",
-            st.session_state.role.title()
-        )
+    first, second = st.columns(2)
+    first.metric("Username", username)
+    second.metric("Role", st.session_state.role.title())
 
     st.divider()
-    st.subheader("📊 Your Prediction Statistics")
+    st.subheader("Prediction Statistics")
 
-    history = st.session_state.history
+    good = sum(row["Quality"] == "Good" for row in history)
+    broken = sum(row["Quality"] == "Broken" for row in history)
+    cracked = sum(row["Quality"] == "Cracked" for row in history)
 
-    total = len(history)
+    a, b, c, d = st.columns(4)
+    a.metric("Total Predictions", len(history))
+    b.metric("Good", good)
+    c.metric("Broken", broken)
+    d.metric("Cracked", cracked)
 
-    good_count = sum(
-        item["Quality"] == "Good" for item in history
-    )
-    broken_count = sum(
-        item["Quality"] == "Broken" for item in history
-    )
-    cracked_count = sum(
-        item["Quality"] == "Cracked" for item in history
-    )
-
-    col1, col2 = st.columns(2)
-    col1.metric("Total Predictions", total)
-    col2.metric("Good Seeds", good_count)
-
-    col3, col4 = st.columns(2)
-    col3.metric("Broken Seeds", broken_count)
-    col4.metric("Cracked Seeds", cracked_count)
-
-    st.divider()
-    st.subheader("📋 Your Prediction History")
+    st.subheader("Prediction History")
 
     if history:
         st.dataframe(
-            history,
+            list(reversed(history)),
             use_container_width=True,
-            hide_index=True
+            hide_index=True,
         )
 
-        if st.button("Clear My Prediction History"):
+        if st.button("Clear My History"):
             st.session_state.history = []
             st.rerun()
     else:
-        st.info(
-            "No predictions yet. Go to Seed Prediction "
-            "to capture or upload a cotton seed image."
-        )
+        st.info("No predictions yet. Start from Seed Prediction.")
 
 
-# ==================================================
-# 10. ADMIN DASHBOARD
-# ==================================================
-elif page == "Admin Dashboard":
-    st.title("🛡️ Admin Dashboard")
-
-    st.subheader(
-        f"Welcome, Administrator {st.session_state.username}!"
-    )
+# ---------------- ADMIN DASHBOARD ----------------
+def admin_dashboard():
+    st.title("🛠️ Admin Dashboard")
+    st.write("Prediction records available in this session.")
 
     history = st.session_state.history
-
-    total = len(history)
-    good_count = sum(
-        item["Quality"] == "Good" for item in history
-    )
-    broken_count = sum(
-        item["Quality"] == "Broken" for item in history
-    )
-    cracked_count = sum(
-        item["Quality"] == "Cracked" for item in history
-    )
-
-    st.subheader("Current Session Statistics")
-
-    col1, col2 = st.columns(2)
-    col1.metric("Total Predictions", total)
-    col2.metric("Good Seeds", good_count)
-
-    col3, col4 = st.columns(2)
-    col3.metric("Broken Seeds", broken_count)
-    col4.metric("Cracked Seeds", cracked_count)
-
-    st.divider()
-    st.subheader("Prediction Records")
+    st.metric("Total Predictions", len(history))
 
     if history:
         st.dataframe(
-            history,
+            list(reversed(history)),
             use_container_width=True,
-            hide_index=True
+            hide_index=True,
         )
-
-        if st.button("Clear Current Session History"):
-            st.session_state.history = []
-            st.rerun()
     else:
         st.info("No predictions recorded in this session.")
 
-    st.caption(
-        "These records are temporary and session-based."
-    )
 
+# ---------------- MAIN APP ----------------
+def main():
+    if not st.session_state.logged_in:
+        login_page()
+        return
 
-# ==================================================
-# 11. SEED PREDICTION
-# ==================================================
-elif page == "Seed Prediction":
-    st.title("🔬 Cotton Seed Prediction")
+    with st.sidebar:
+        st.title("🌱 Cotton Seed App")
+        st.write("Logged-in Username")
+        st.success(st.session_state.username)
+        st.write("Account Role")
+        st.info(st.session_state.role.title())
 
-    st.write(
-        "Capture a new photo or upload an existing "
-        "cotton seed image."
-    )
+        pages = ["User Dashboard"]
 
-    input_method = st.radio(
-        "Choose image input method:",
-        ["Capture Photo", "Upload Existing Image"],
-        horizontal=True
-    )
+        if st.session_state.role == "admin":
+            pages.append("Admin Dashboard")
 
-    image_file = None
+        pages.append("Seed Prediction")
+        page = st.radio("Navigation", pages)
 
-    if input_method == "Capture Photo":
-        image_file = st.camera_input(
-            "Take a photo of the cotton seeds"
-        )
-    else:
-        image_file = st.file_uploader(
-            "Choose a cotton seed image",
-            type=["jpg", "jpeg", "png"]
-        )
+        st.divider()
 
-    if image_file is not None:
-        try:
-            image = Image.open(image_file).convert("RGB")
+        if st.button("Logout", use_container_width=True):
+            st.session_state.logged_in = False
+            st.session_state.username = ""
+            st.session_state.role = ""
+            st.session_state.history = []
+            st.rerun()
 
-            st.image(
-                image,
-                caption="Selected Cotton Seed Image",
-                use_container_width=True
-            )
-
-            if st.button(
-                "Predict Seed Quality",
-                use_container_width=True
-            ):
-                with st.spinner("Analyzing seed image..."):
-                    model = load_model()
-
-                    resized_image = image.resize((224, 224))
-                    image_array = np.array(
-                        resized_image,
-                        dtype=np.float32
-                    )
-                    image_array = np.expand_dims(
-                        image_array,
-                        axis=0
-                    )
-
-                    predictions = model.predict(
-                        image_array,
-                        verbose=0
-                    )[0]
-
-                    # Must match the class order
-                    # used during model training.
-                    classes = ["Broken", "Cracked", "Good"]
-
-                    predicted_index = int(
-                        np.argmax(predictions)
-                    )
-                    predicted_class = classes[predicted_index]
-                    confidence = float(
-                        predictions[predicted_index] * 100
-                    )
-
-                record = {
-                    "Username": st.session_state.username,
-                    "Role": st.session_state.role.title(),
-                    "Quality": predicted_class,
-                    "Confidence": f"{confidence:.2f}%"
-                }
-
-                st.session_state.history.append(record)
-
-                st.success("Prediction completed!")
-
-                if predicted_class == "Good":
-                    st.success(
-                        f"Predicted Quality: {predicted_class}"
-                    )
-                else:
-                    st.warning(
-                        f"Predicted Quality: {predicted_class}"
-                    )
-
-                st.metric(
-                    "Prediction Confidence",
-                    f"{confidence:.2f}%"
-                )
-
-                st.subheader("Class Confidence Scores")
-
-                for index, class_name in enumerate(classes):
-                    score = float(predictions[index] * 100)
-
-                    st.write(
-                        f"**{class_name}: {score:.2f}%**"
-                    )
-                    st.progress(
-                        min(max(score / 100, 0.0), 1.0)
-                    )
-
-                st.caption(
-                    "These are AI model estimates. Verify results "
-                    "before making commercial seed-quality decisions."
-                )
-
-        except Exception:
-            st.error(
-                "Unable to process the image or load the model. "
-                "Check the model file and app dependencies."
-            )
-
+    st.title("🌱 Cotton Seed Quality Detection")
+    st.caption("AI-powered cotton seed image classification")
     st.divider()
-    st.subheader("Recent Predictions")
 
-    if st.session_state.history:
-        st.dataframe(
-            st.session_state.history,
-            use_container_width=True,
-            hide_index=True
-        )
-    else:
-        st.info("Your predictions will appear here.")
+    if page == "User Dashboard":
+        user_dashboard()
+    elif page == "Admin Dashboard":
+        admin_dashboard()
+    elif page == "Seed Prediction":
+        prediction_page()
+
+
+# ---------------- RUN ----------------
+if __name__ == "__main__":
+    try:
+        main()
+    except Exception as error:
+        st.error("The app encountered an unexpected error.")
+        st.exception(error)
