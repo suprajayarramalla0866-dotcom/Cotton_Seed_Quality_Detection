@@ -157,7 +157,17 @@ if page == "Admin Dashboard":
         st.info("No predictions recorded in this session.")
 
 else:
-    st.subheader("Seed Quality Prediction")
+    st.markdown(
+    """
+    <h2 style="color:#216e39;">
+        🌱 Seed Quality Prediction
+    </h2>
+    <p style="color:#50765a;">
+        Upload a cotton seed image to analyze its quality.
+    </p>
+    """,
+    unsafe_allow_html=True
+)
 
     uploaded_file = st.file_uploader(
         "Choose a cotton seed image",
@@ -201,7 +211,10 @@ else:
                     "Confidence": f"{confidence:.2f}%"
                 })
 
-            st.subheader("Prediction Result")
+           st.markdown(
+    '<h2 style="color:#216e39;">🌿 Prediction Result</h2>',
+    unsafe_allow_html=True
+)
 
             if predicted_class == "Good":
                 st.success("Quality: GOOD")
