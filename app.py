@@ -237,41 +237,48 @@ def show_header():
 # 7. WELCOME SCREEN
 # =====================================================
 
+
 def welcome_page():
-    st.markdown("""
-    <div style="text-align:center; padding:65px 15px 30px 15px;">
-        <div style="font-size:100px; line-height:1.2; margin-bottom:20px;">
-            🌱
-        </div>
-
-        <h1 style="
-            color:#064D25;
-            font-size:2.5rem;
-            font-weight:800;
-            line-height:1.3;
-            margin-bottom:18px;
-            border:none;
-            background:transparent;
-        ">
-            Welcome to Cotton Seed Quality Detection App
-        </h1>
-
-        <p style="
-            color:#4D6654;
-            font-size:1.1rem;
-            margin-bottom:20px;
-        ">
-            Smart cotton seed quality analysis using image processing
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
-
-    left, center, right = st.columns([1, 1.5, 1])
+    # Center the welcome content
+    left, center, right = st.columns([1, 3, 1])
 
     with center:
+        st.write("")
+        st.write("")
+        st.write("")
+        st.write("")
+
+        # Logo
+        st.markdown(
+            "<div style='text-align:center; font-size:100px;'>🌱</div>",
+            unsafe_allow_html=True
+        )
+
+        # Welcome title using Streamlit's native heading
+        st.markdown(
+            "<h1 style='color:#064D25; text-align:center;'>"
+            "Welcome to Cotton Seed Quality Detection App"
+            "</h1>",
+            unsafe_allow_html=True
+        )
+
+        # Description
+        st.markdown(
+            "<p style='color:#4D6654; text-align:center; "
+            "font-size:18px;'>"
+            "Smart cotton seed quality analysis using image processing"
+            "</p>",
+            unsafe_allow_html=True
+        )
+
+        st.write("")
+        st.write("")
+
+        # Get Started button
         if st.button("Get Started →", use_container_width=True):
             st.session_state.show_login = True
             st.rerun()
+
 
 
 # =====================================================
