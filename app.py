@@ -211,10 +211,12 @@ else:
                     "Confidence": f"{confidence:.2f}%"
                 })
 
-           st.markdown(
-    '<h2 style="color:#216e39;">🌿 Prediction Result</h2>',
-    unsafe_allow_html=True
-)
+           
+            st.markdown(
+                '<h2 style="color:#216e39;">🌿 Prediction Result</h2>',
+                unsafe_allow_html=True
+            )
+
 
             if predicted_class == "Good":
                 st.success("Quality: GOOD")
