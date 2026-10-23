@@ -25,39 +25,61 @@ st.set_page_config(
 st.markdown(
     """
     <style>
+    /* Main page */
     .stApp {
-        background-color: #f7fbf7;
+        background-color: #F7FBF7;
     }
 
+    /* Dark green headings */
     h1, h2, h3 {
-        color: #176b35;
+        color: #064D25 !important;
     }
 
+    /* Main application header */
+    .app-header {
+        color: #064D25;
+        font-size: 2.35rem;
+        font-weight: 800;
+        text-align: center;
+        padding: 18px 10px;
+        margin-bottom: 12px;
+        border-bottom: 3px solid #064D25;
+    }
+
+    /* Sidebar */
     [data-testid="stSidebar"] {
-        background-color: #e7f4e8;
+        background-color: #E4F0E5;
     }
 
+    /* Buttons */
     div.stButton > button,
     div.stFormSubmitButton > button {
-        background-color: #198754;
-        color: white;
-        border: none;
-        border-radius: 8px;
-        min-height: 40px;
+        background-color: #064D25 !important;
+        color: white !important;
+        border: 1px solid #064D25 !important;
+        border-radius: 8px !important;
+        min-height: 42px;
         font-weight: 600;
     }
 
     div.stButton > button:hover,
     div.stFormSubmitButton > button:hover {
-        background-color: #126b3b;
-        color: white;
+        background-color: #0B6B35 !important;
+        border-color: #0B6B35 !important;
+        color: white !important;
     }
 
+    /* Metrics */
     [data-testid="stMetric"] {
         background-color: white;
-        border: 1px solid #d5e8d8;
-        padding: 12px;
+        border: 1px solid #C6DCC9;
+        padding: 14px;
         border-radius: 10px;
+    }
+
+    /* Inputs */
+    [data-testid="stTextInput"] input {
+        border-radius: 7px;
     }
     </style>
     """,
@@ -73,7 +95,7 @@ DB_PATH = BASE_DIR / "users.db"
 
 IMAGE_SIZE = (224, 224)
 
-# Must match the actual class order used during model training.
+# Confirm these labels match the model's training order.
 CLASS_NAMES = ["Broken", "Cracked", "Good"]
 
 
@@ -153,7 +175,7 @@ def register_user(username, password):
                 (username, password_hash, salt),
             )
 
-        return True, "Your user account was created successfully."
+        return True, "Your account was created successfully."
 
     except sqlite3.IntegrityError:
         return False, "This username already exists."
@@ -186,34 +208,24 @@ def check_login(username, password, selected_role):
     if not hmac.compare_digest(entered_hash, saved_hash):
         return None
 
-    # The selected login type must match the stored account role.
     if saved_role.lower() != selected_role.lower():
         return None
 
     return saved_username, saved_role.lower()
 
 
-# Create the database and table.
 init_database()
 
 
 # =====================================================
-# 6. CREATE THE FIRST ADMIN ACCOUNT SECURELY
+# 6. INITIAL ADMIN ACCOUNT
 # =====================================================
 def create_initial_admin():
-    """
-    Creates an initial admin only when ADMIN_USERNAME and
-    ADMIN_PASSWORD are configured in Streamlit Secrets.
-    Existing accounts are never overwritten.
-    """
     try:
-        admin_username = st.secrets["ADMIN_USERNAME"]
-        admin_password = st.secrets["ADMIN_PASSWORD"]
+        admin_username = str(st.secrets["ADMIN_USERNAME"]).strip()
+        admin_password = str(st.secrets["ADMIN_PASSWORD"])
     except (KeyError, FileNotFoundError):
         return
-
-    admin_username = str(admin_username).strip()
-    admin_password = str(admin_password)
 
     if not admin_username or len(admin_password) < 8:
         return
@@ -266,7 +278,7 @@ def predict_image(image):
     image_array = np.asarray(image, dtype=np.float32)
     image_array = np.expand_dims(image_array, axis=0)
 
-    # This assumes training used RGB pixels in the 0–255 range.
+    # Assumes training used RGB pixels in the 0–255 range.
     predictions = np.asarray(
         model.predict(image_array, verbose=0)
     )[0]
@@ -289,10 +301,22 @@ def predict_image(image):
 
 
 # =====================================================
-# 9. LOGIN AND SIGN-UP PAGE
+# 9. REUSABLE DARK GREEN HEADER
+# =====================================================
+def show_header():
+    st.markdown(
+        '<div class="app-header">'
+        '🌱 Cotton Seed Quality Detection'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+
+
+# =====================================================
+# 10. LOGIN AND SIGN-UP PAGE
 # =====================================================
 def login_page():
-    st.title("🌱 Cotton Seed Quality Detection")
+    show_header()
     st.caption("AI-based cotton seed quality classification")
     st.divider()
 
@@ -301,7 +325,7 @@ def login_page():
     with center:
         login_tab, signup_tab = st.tabs(["Login", "Sign Up"])
 
-        # ---------------- LOGIN ----------------
+        # LOGIN
         with login_tab:
             st.subheader("Login to Your Account")
 
@@ -346,7 +370,7 @@ def login_page():
                             "and select the correct account type."
                         )
 
-        # ---------------- SIGN UP ----------------
+        # SIGN UP
         with signup_tab:
             st.subheader("Create a New User Account")
 
@@ -393,15 +417,15 @@ def login_page():
                     if success:
                         st.success(message)
                         st.info(
-                            "Your user account is ready. "
-                            "Select User in the Login tab to sign in."
+                            "Your account is ready. Select User "
+                            "in the Login tab to sign in."
                         )
                     else:
                         st.error(message)
 
 
 # =====================================================
-# 10. USER DASHBOARD
+# 11. USER DASHBOARD
 # =====================================================
 def user_dashboard():
     username = st.session_state.username
@@ -409,10 +433,7 @@ def user_dashboard():
 
     st.title(f"👤 {username}'s Dashboard")
     st.subheader(f"Welcome, {username}!")
-
-    st.write(
-        "View your account details and seed prediction statistics."
-    )
+    st.write("View your account and seed prediction statistics.")
 
     col1, col2 = st.columns(2)
     col1.metric("Username", username)
@@ -450,13 +471,11 @@ def user_dashboard():
 
 
 # =====================================================
-# 11. ADMIN DASHBOARD
+# 12. ADMIN DASHBOARD
 # =====================================================
 def admin_dashboard():
     st.title("🛠️ Admin Dashboard")
-    st.write(
-        "View prediction records available in this session."
-    )
+    st.write("View prediction records in the current session.")
 
     history = st.session_state.history
 
@@ -486,15 +505,11 @@ def admin_dashboard():
 
 
 # =====================================================
-# 12. SEED PREDICTION PAGE
+# 13. SEED PREDICTION PAGE
 # =====================================================
 def prediction_page():
     st.title("🔬 Cotton Seed Quality Prediction")
-
-    st.write(
-        "Capture a photo or upload an image of cotton seeds "
-        "to classify it using your trained AI model."
-    )
+    st.write("Capture or upload a cotton seed image for analysis.")
 
     method = st.radio(
         "Choose image source",
@@ -520,7 +535,7 @@ def prediction_page():
     try:
         image = Image.open(image_file).convert("RGB")
     except Exception:
-        st.error("Unable to open this image. Please choose another.")
+        st.error("Unable to open this image. Choose another image.")
         return
 
     st.image(
@@ -546,12 +561,11 @@ def prediction_page():
                 st.warning(f"Quality: {label}")
 
             st.metric("Model Confidence", f"{confidence:.2f}%")
-
             st.subheader("Class Scores")
 
             for class_name, score in scores.items():
                 st.write(f"**{class_name}: {score:.2f}%**")
-                st.progress(min(max(score / 100, 0.0), 1.0))
+                st.progress(min(max(score / 100.0, 0.0), 1.0))
 
             st.session_state.history.append({
                 "Username": st.session_state.username,
@@ -565,14 +579,13 @@ def prediction_page():
 
         except Exception as error:
             st.error(
-                "Prediction failed. Check the model file, "
-                "dependencies, and preprocessing settings."
+                "Prediction failed. Check the model and its settings."
             )
             st.exception(error)
 
 
 # =====================================================
-# 13. MAIN APPLICATION
+# 14. MAIN APPLICATION
 # =====================================================
 def main():
     if not st.session_state.logged_in:
@@ -581,10 +594,8 @@ def main():
 
     with st.sidebar:
         st.title("🌱 Cotton Seed App")
-
         st.write("Logged-in Username")
         st.success(st.session_state.username)
-
         st.write("Account Role")
         st.info(st.session_state.role.title())
 
@@ -596,7 +607,6 @@ def main():
             pages.append("Admin Dashboard")
 
         pages.append("Seed Prediction")
-
         page = st.radio("Navigation", pages)
 
         st.divider()
@@ -608,7 +618,7 @@ def main():
             st.session_state.history = []
             st.rerun()
 
-    st.title("🌱 Cotton Seed Quality Detection")
+    show_header()
     st.caption("AI-powered cotton seed image classification")
     st.divider()
 
@@ -621,7 +631,7 @@ def main():
 
 
 # =====================================================
-# 14. RUN APPLICATION
+# 15. RUN APPLICATION
 # =====================================================
 if __name__ == "__main__":
     try:
